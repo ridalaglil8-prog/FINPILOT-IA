@@ -124,3 +124,114 @@ def test_settings_page_renders_upload_and_controls():
     at = _run("pages/7_Settings.py")
     _assert_no_exception(at, "settings")
     assert len(at.number_input) >= 2
+
+
+def _metrics(at) -> dict:
+    return {str(m.label): str(m.value) for m in at.metric}
+
+
+def test_stress_page_shocks_default_to_zero_not_to_the_widget_minimum():
+    """Regression: ``st.number_input`` defaults to ``value="min"``, so shock
+    inputs seeded with ``min_value=-100`` opened on a −100 % scenario that
+    wiped out the whole portfolio, and the class-level presets never worked."""
+    from streamlit.elements.lib import policies
+
+    # the duplication warning is latched once per process — reset the latch so
+    # this test really proves the page never emits it
+    policies._shown_default_value_warning = False
+
+    at = _run("pages/5_Stress_Testing.py")
+    _assert_no_exception(at, "stress")
+
+    shocks = {str(ni.key): float(ni.value) for ni in at.number_input}
+    assert shocks, "expected shock inputs"
+    assert all(value > -100.0 for value in shocks.values()), shocks
+    assert shocks["stress_group_US Equity ETF"] == -10.0   # default preset
+    assert shocks["stress_asset_SPY"] == 0.0               # not a fake −100 %
+
+    metrics = _metrics(at)
+    # 45 % + 25 % equity at −10 %  =>  −7 % of the portfolio
+    assert metrics["Estimated impact"] == "-7.00 %"
+    assert "-100.00" not in " ".join(metrics.values())
+
+    # seeding the widget keys must not trigger Streamlit's duplication warning
+    duplication = [str(w.value) for w in at.warning if "Session State API" in str(w.value)]
+    assert not duplication, duplication
+
+
+def test_stress_scenario_is_applied_to_the_current_portfolio_value():
+    """"Value before" must match the value the dashboard reports today,
+    not the initial capital invested."""
+    import config
+    from components.kpi_cards import fmt_money
+    from services.portfolio_service import build_context
+
+    at = _run("pages/5_Stress_Testing.py")
+    _assert_no_exception(at, "stress")
+
+    current_value = build_context(config.default_state())["metrics"]["current_value"]
+    metrics = _metrics(at)
+    assert metrics["Portfolio value before"] == fmt_money(current_value, "USD")
+    if current_value != 100_000.0:
+        assert metrics["Portfolio value before"] != fmt_money(100_000.0, "USD")
+
+
+def test_stress_preset_switch_applies_class_shocks():
+    """A preset must reach every asset of the class (zero-valued per-asset
+    widgets used to cancel the class shock entirely)."""
+    at = _run("pages/5_Stress_Testing.py")
+    at.radio(key="stress_preset").set_value("bond")
+    at.run()
+    _assert_no_exception(at, "stress (bond preset)")
+
+    shocks = {str(ni.key): float(ni.value) for ni in at.number_input}
+    assert shocks["stress_group_Bond ETF"] == -8.0
+    assert shocks["stress_group_US Equity ETF"] == 0.0
+    # 20 % bond weight × −8 %  =>  −1.6 %
+    assert _metrics(at)["Estimated impact"] == "-1.60 %"
+
+
+def test_stress_per_asset_shock_overrides_its_class_shock():
+    at = _run("pages/5_Stress_Testing.py")
+    at.radio(key="stress_preset").set_value("bond")
+    at.run()
+    at.number_input(key="stress_asset_TLT").set_value(5.0)   # exempt +5 %
+    at.run()
+    _assert_no_exception(at, "stress (asset override)")
+
+    # the explicit per-asset +5 % replaces the −8 % class shock on TLT
+    assert _metrics(at)["Estimated impact"] == "+1.00 %"
+
+
+def test_stress_scenario_stored_for_the_assistant_matches_the_screen():
+    at = _run("pages/5_Stress_Testing.py")
+    _assert_no_exception(at, "stress")
+
+    scenario = at.session_state["stress_test"]
+    assert scenario.get("signature")
+    assert [g["currency"] for g in scenario["groups"]] == ["USD"]
+    assert scenario["groups"][0]["impact_pct"] == pytest.approx(-0.07)
+    # the AI is told exactly what the page displays
+    assert _metrics(at)["Estimated impact"] == "-7.00 %"
+
+
+def test_optimization_results_are_dropped_when_the_portfolio_changes():
+    """Results computed on another portfolio must never stay on screen (or
+    reach the assistant) — the user is asked to run the optimisation again."""
+    at = _run("pages/4_Portfolio_Optimization.py")
+    _assert_no_exception(at, "optimization (initial)")
+    assert any("Run optimization" in str(i.value) for i in at.info)
+
+    at.button(key="opt_run").click()
+    at.run()
+    _assert_no_exception(at, "optimization (run)")
+    assert "optimization" in at.session_state
+    assert not any("Run optimization" in str(i.value) for i in at.info)
+
+    # a valid rebalancing (weights still total 100 %) invalidates the result
+    for asset, weight in zip(at.session_state["assets"], [0.60, 0.20, 0.10, 0.10]):
+        asset["weight"] = weight
+    at.run()
+    _assert_no_exception(at, "optimization (changed)")
+    assert any("Run optimization" in str(i.value) for i in at.info)
+    assert not at.metric, "stale optimization metrics must not be rendered"

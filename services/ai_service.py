@@ -63,12 +63,15 @@ def is_configured() -> bool:
 
 
 def status_text() -> str:
-    """Short status line for the Settings / Assistant pages (no secrets)."""
+    """Short status line for the Settings / Assistant pages.
+
+    Never renders any part of the key: the UI only reports whether one is
+    configured, and which model would be used.
+    """
     settings = get_settings()
     if not settings.configured:
         return "not configured (LLM_API_KEY missing)"
-    masked = f"{settings.api_key[:3]}…{settings.api_key[-2:]}" if settings.api_key and len(settings.api_key) > 6 else "•••"
-    return f"configured — model {settings.model}, key {masked}"
+    return f"configured — model {settings.model}, API key detected"
 
 
 def _error_from_response(response: Any) -> AIServiceError:

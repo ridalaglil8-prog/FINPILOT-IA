@@ -11,7 +11,11 @@ from components import kpi_cards as KPI
 from components.sidebar import render_sidebar
 from i18n import t
 from optimization import optimizer
-from services.portfolio_service import build_context, is_usable
+from services.portfolio_service import (
+    build_context,
+    is_usable,
+    optimization_fingerprint,
+)
 
 
 def _run_optimization(context, objective: str, max_weight: float, risk_free_rate: float):
@@ -32,6 +36,10 @@ def _run_optimization(context, objective: str, max_weight: float, risk_free_rate
     return {
         "objective": objective,
         "engine": result["engine"],
+        "max_weight": float(max_weight),
+        # Lets build_context() drop this result if the portfolio, the period,
+        # the dataset or the constraints stop matching.
+        "signature": optimization_fingerprint(context, st.session_state),
         "weights": result["weights"],
         "performance": result["performance"],
         "current_performance": current,
@@ -68,26 +76,31 @@ def main() -> None:
         )
         max_weight = st.slider(
             t("opt.max_weight_label"), min_value=5, max_value=100, value=100, step=5,
-            help=t("opt.max_weight_help"),
+            help=t("opt.max_weight_help"), key="opt_max_weight",
         ) / 100.0
 
     if len(context["groups"][0]["assets"]) < 2:
         st.info(t("opt.need_valid"))
         return
 
+    # Stored results are re-validated by build_context(): if the portfolio,
+    # the period or the constraints changed, they are gone and the user is
+    # asked to run the optimisation again instead of seeing stale numbers.
+    result = context.get("optimization")
     run = st.button(t("opt.run"), key="opt_run", type="primary")
 
     if run:
         with st.spinner(t("ai.thinking")):
             try:
-                st.session_state["optimization"] = _run_optimization(
+                result = _run_optimization(
                     context, objective, max_weight, risk_free_rate
                 )
+                st.session_state["optimization"] = result
             except optimizer.OptimizationError as exc:
                 st.session_state.pop("optimization", None)
+                result = None
                 st.error(str(exc))
 
-    result = st.session_state.get("optimization")
     if not result:
         st.info(t("opt.hint"))
         return

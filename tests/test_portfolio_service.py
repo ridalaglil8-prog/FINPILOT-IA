@@ -1,6 +1,8 @@
 """End-to-end context test: session-state-like input -> computed context."""
 from __future__ import annotations
 
+import datetime as _dt
+
 import pytest
 
 import config
@@ -113,3 +115,93 @@ def test_allocation_rows_carry_currency_and_value():
         assert row["currency"] == "USD"
         assert row["value"] > 0
         assert 0 < row["weight_pct"] <= 100
+
+
+# ---------------------------------------------------------------------------
+# Stored-result freshness: results computed on other inputs must disappear
+# ---------------------------------------------------------------------------
+def test_no_stored_results_by_default():
+    context = PS.build_context(_state())
+    assert context["optimization"] is None
+    assert context["stress_test"] is None
+
+
+def test_stored_results_without_a_signature_are_dropped():
+    state = _state()
+    PS.build_context(state)
+    state["optimization"] = {"engine": "PyPortfolioOpt", "weights": {"SPY": 1.0}}
+    state["stress_test"] = {"groups": [{"currency": "USD"}]}
+    context = PS.build_context(state)
+    assert context["optimization"] is None
+    assert context["stress_test"] is None
+
+
+def test_stored_results_for_the_current_inputs_are_kept():
+    state = _state()
+    base = PS.build_context(state)
+    state["stress_test"] = {"groups": [], "signature": PS.stress_fingerprint(base)}
+    state["optimization"] = {
+        "engine": "PyPortfolioOpt",
+        "signature": PS.optimization_fingerprint(base, state),
+    }
+    context = PS.build_context(state)
+    assert context["stress_test"] is not None
+    assert context["optimization"]["engine"] == "PyPortfolioOpt"
+
+
+def test_stored_results_are_dropped_when_the_period_changes():
+    state = _state()
+    base = PS.build_context(state)
+    state["stress_test"] = {"groups": [], "signature": PS.stress_fingerprint(base)}
+    start, end = config.default_period()
+    state["start"], state["end"] = start - _dt.timedelta(days=90), end
+    context = PS.build_context(state)
+    assert context["stress_test"] is None
+
+
+def test_stored_results_are_dropped_when_the_portfolio_changes():
+    state = _state()
+    base = PS.build_context(state)
+    state["stress_test"] = {"groups": [], "signature": PS.stress_fingerprint(base)}
+    for asset, weight in zip(state["assets"], [0.60, 0.20, 0.10, 0.10]):
+        asset["weight"] = weight
+    context = PS.build_context(state)
+    assert context["stress_test"] is None
+
+
+def test_optimization_signature_depends_on_the_constraints():
+    state = _state()
+    base = PS.build_context(state)
+    state["optimization"] = {
+        "engine": "PyPortfolioOpt",
+        "signature": PS.optimization_fingerprint(base, state),
+    }
+    assert PS.build_context(state)["optimization"] is not None
+
+    state["opt_max_weight"] = 25            # user tightened the weight cap
+    assert PS.build_context(state)["optimization"] is None
+
+    state["opt_max_weight"] = 100
+    state["opt_objective"] = "max_sharpe"   # or switched the objective
+    assert PS.build_context(state)["optimization"] is None
+
+
+def test_risk_free_rate_invalidates_optimization_but_not_stress():
+    state = _state()
+    base = PS.build_context(state)
+    state["optimization"] = {
+        "engine": "PyPortfolioOpt",
+        "signature": PS.optimization_fingerprint(base, state),
+    }
+    state["stress_test"] = {"groups": [], "signature": PS.stress_fingerprint(base)}
+    state["risk_free_rate"] = 0.05
+    context = PS.build_context(state)
+    assert context["optimization"] is None   # Sharpe input changed
+    assert context["stress_test"] is not None  # a price shock knows no rf rate
+
+
+def test_fingerprints_are_stable_and_distinct():
+    state = _state()
+    context = PS.build_context(state)
+    assert PS.stress_fingerprint(context) == PS.stress_fingerprint(context)
+    assert PS.optimization_fingerprint(context, state) != PS.stress_fingerprint(context)

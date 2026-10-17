@@ -14,6 +14,8 @@ currency. Totals are merged **only** when an explicit FX rate is configured.
 from __future__ import annotations
 
 import datetime as _dt
+import hashlib
+import json
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
@@ -49,6 +51,75 @@ def _state_weights(assets: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
 
 def _finite(frame: pd.DataFrame) -> pd.DataFrame:
     return frame.replace([np.inf, -np.inf], np.nan)
+
+
+def _safe_float(value: Any, default: float) -> float:
+    """Coerce to float without ever letting bad input reach a calculation."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if np.isfinite(number) else default
+
+
+# ---------------------------------------------------------------------------
+# Result freshness (stale results must never be shown or sent to the LLM)
+# ---------------------------------------------------------------------------
+# A result computed by the optimizer or by the stress engine belongs to the
+# exact portfolio + period + dataset it was computed on. Every stored result
+# therefore carries a fingerprint of its inputs, and :func:`build_context`
+# drops it when those inputs no longer match — so a page (or the AI
+# assistant) can never describe numbers for a different portfolio.
+def _fingerprint(payload: Mapping[str, Any]) -> str:
+    blob = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
+def _data_payload(context: Mapping[str, Any]) -> Dict[str, Any]:
+    """The data/portfolio inputs that every stored result depends on."""
+    prices = context.get("prices")
+    payload: Dict[str, Any] = {
+        "start": context.get("start"),
+        "end": context.get("end"),
+        "market": context.get("market"),
+        "mode": context.get("data_mode"),
+        "groups": [
+            [group.get("currency"), round(_safe_float(group.get("capital"), 0.0), 6),
+             sorted([str(t), round(_safe_float(w, 0.0), 8)]
+                    for t, w in (group.get("weights") or {}).items())]
+            for group in context.get("groups", []) or []
+        ],
+        "obs": int(len(prices)) if prices is not None and len(prices) else 0,
+    }
+    if payload["obs"]:
+        payload["first"] = str(prices.index.min())
+        payload["last"] = str(prices.index.max())
+    return payload
+
+
+def stress_fingerprint(context: Mapping[str, Any]) -> str:
+    """Fingerprint of the inputs a stress scenario was computed from."""
+    return _fingerprint(_data_payload(context))
+
+
+def optimization_fingerprint(context: Mapping[str, Any],
+                              state: Optional[Mapping[str, Any]] = None) -> str:
+    """Fingerprint of the inputs + constraints an optimization was run with."""
+    state = state or {}
+    raw_max_weight = state.get("opt_max_weight")
+    return _fingerprint({
+        **_data_payload(context),
+        "objective": str(state.get("opt_objective") or "min_volatility"),
+        "max_weight": round(_safe_float(raw_max_weight, 100.0) / 100.0, 6),
+        "rf": round(_safe_float(context.get("risk_free_rate"), 0.0), 6),
+    })
+
+
+def _fresh_result(stored: Any, signature: str) -> Optional[Dict[str, Any]]:
+    """Return ``stored`` only when it is a dict carrying this signature."""
+    if isinstance(stored, dict) and stored.get("signature") == signature:
+        return stored
+    return None
 
 
 def _metric_block(
@@ -107,6 +178,8 @@ def _empty_context(state: Mapping[str, Any], errors: List[str]) -> Dict[str, Any
         "correlation": None,
         "risk_contributors": None,
         "multi_currency": False,
+        "optimization": None,
+        "stress_test": None,
     }
 
 
@@ -321,7 +394,7 @@ def build_context(state: Mapping[str, Any]) -> Dict[str, Any]:
     if correlation_block and correlation_block.get("average") is not None:
         metrics["average_correlation"] = correlation_block["average"]
 
-    return {
+    context: Dict[str, Any] = {
         "ok": not errors,
         "errors": errors,
         "warnings": warnings,
@@ -354,6 +427,17 @@ def build_context(state: Mapping[str, Any]) -> Dict[str, Any]:
         "risk_free_rate": risk_free,
         "warnings": warnings,
     }
+
+    # 8. stored results ----------------------------------------------------
+    # Optimizer / stress outputs survive only while the portfolio, the period
+    # and the dataset they were computed on are still the current ones.
+    context["optimization"] = _fresh_result(
+        state.get("optimization"), optimization_fingerprint(context, state)
+    )
+    context["stress_test"] = _fresh_result(
+        state.get("stress_test"), stress_fingerprint(context)
+    )
+    return context
 
 
 def is_usable(context: Mapping[str, Any]) -> bool:

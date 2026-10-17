@@ -122,7 +122,7 @@ finpilot-ai/
 ├── locales/
 │   ├── en.json                # Complete English dictionary
 │   └── fr.json                # Complete French dictionary (same keys)
-└── tests/                     # 147 deterministic pytest tests
+└── tests/                     # 191 deterministic pytest tests
 ```
 
 **Separation of concerns:** `analytics/`, `optimization/`, `data/` and
@@ -152,7 +152,7 @@ FINPILOT_DEBUG=0
 
 `.env` is listed in `.gitignore` and must never be committed. Keys are read
 with `python-dotenv` at startup and are never rendered in the UI (the Settings
-page shows a masked key only).
+page only reports whether a key is configured, never any part of it).
 
 Any OpenAI-compatible endpoint works (OpenAI, Azure-compatible proxies,
 Ollama, vLLM, Mistral…) — just set `LLM_BASE_URL` and `LLM_MODEL`.
@@ -218,7 +218,7 @@ the app will never guess a conversion.
 | Risk contribution | `RC_i = w_i · (Σw)_i`, percentages sum to 100 % |
 | Herfindahl index | `Σ w_i²`, effective *n* = `1 / HHI` |
 | Historical VaR / CVaR | empirical quantile / tail mean (losses positive) |
-| Stress impact | `impact = Σ w_i · shock_i`, `value_after = capital · (1 + impact)` |
+| Stress impact | `impact = Σ w_i · shock_i`, `value_after = current_value · (1 + impact)` (per currency sub-portfolio) |
 
 **Assumptions & edge cases** (all covered by tests):
 
@@ -237,6 +237,11 @@ the app will never guess a conversion.
 - **Optimisation is historical**, based on estimated means and a sample
   covariance matrix under strong assumptions. It does **not** guarantee better
   future performance.
+- **Stored results expire.** Optimisation and stress results carry a
+  fingerprint of the portfolio, period, dataset and constraints they were
+  computed from. Change any of them and the result is dropped — the page asks
+  you to run it again instead of showing (or letting the assistant quote)
+  numbers that no longer describe your portfolio.
 
 ---
 
@@ -246,7 +251,7 @@ the app will never guess a conversion.
 pytest tests -q
 ```
 
-**147 tests** run deterministically and **fully offline** (no network, no API
+**191 tests** run deterministically and **fully offline** (no network, no API
 keys). They cover daily/cumulative/annualised returns, volatility, Sharpe,
 drawdown, VaR/CVaR, weight validation, portfolio values, correlation, risk
 contributions, optimisation constraints, missing data, invalid inputs, CSV

@@ -19,9 +19,14 @@ from services.portfolio_service import build_context
 
 
 def _enriched_payload(context, language: str) -> str:
-    """Attach the latest optimization / stress results, if any, to the payload."""
+    """Attach the latest optimization / stress results, if any, to the payload.
+
+    Both come from ``build_context``, which already discards results computed
+    on a different portfolio, period or dataset — the model can therefore only
+    ever see results that are still current.
+    """
     enriched = dict(context)
-    optimization = st.session_state.get("optimization")
+    optimization = context.get("optimization")
     if optimization:
         enriched["optimization"] = {
             "objective": optimization.get("objective"),
@@ -31,7 +36,7 @@ def _enriched_payload(context, language: str) -> str:
             "performance": optimization.get("performance"),
             "current_performance": optimization.get("current_performance"),
         }
-    scenario = st.session_state.get("stress_test")
+    scenario = context.get("stress_test")
     if scenario:
         enriched["stress_test"] = [
             {
