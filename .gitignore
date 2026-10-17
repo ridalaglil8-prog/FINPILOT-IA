@@ -6,6 +6,7 @@ env/
 
 # Python
 _venv_verify/
+_st166/
 __pycache__/
 *.py[cod]
 *.egg-info/

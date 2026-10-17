@@ -12,6 +12,7 @@ from analytics.risk import drawdown_series
 from components import charts as C
 from components import kpi_cards as KPI
 from components.sidebar import render_sidebar
+from components.streamlit_compat import plotly_chart
 from i18n import t
 from services.portfolio_service import build_context, is_usable
 
@@ -83,10 +84,9 @@ def main() -> None:
     ])
 
     with tab_wealth:
-        st.plotly_chart(
+        plotly_chart(
             C.wealth_chart(wealth, benchmark_wealth,
                            title=t("dashboard.wealth_title"), y_title=currency),
-            use_container_width=True,
         )
 
     with tab_cumulative:
@@ -94,10 +94,9 @@ def main() -> None:
         benchmark_cumulative = None
         if benchmark_wealth is not None:
             benchmark_cumulative = (benchmark_wealth / float(benchmark_wealth.iloc[0]) - 1.0) * 100.0
-        st.plotly_chart(
+        plotly_chart(
             C.wealth_chart(wealth, benchmark_wealth, title=t("perf.cumulative_title"),
                            as_pct_from_start=True),
-            use_container_width=True,
         )
         st.caption(f"{t('perf.total_return')}: {float(cumulative.iloc[-1]):+.2f} %"
                    + (f" · {context.get('benchmark_ticker', '')}: "
@@ -106,8 +105,7 @@ def main() -> None:
 
     with tab_monthly:
         frame = _monthly_returns(returns)
-        st.plotly_chart(_monthly_heatmap(frame, state.get("language", "en")),
-                        use_container_width=True)
+        plotly_chart(_monthly_heatmap(frame, state.get("language", "en")),)
         st.caption(t("perf.monthly_note"))
 
         summary = st.columns(4)
@@ -124,21 +122,19 @@ def main() -> None:
                               f"{float(Ret.cumulative_returns(returns).iloc[-1]) * 100:+.2f} %")
 
     with tab_drawdown:
-        st.plotly_chart(
+        plotly_chart(
             C.drawdown_chart(drawdown_series(returns), title=t("dashboard.drawdown_title")),
-            use_container_width=True,
         )
 
     if context.get("benchmark_metrics"):
         st.subheader(t("perf.benchmark_title"))
         KPI.render_benchmark_card(context["benchmark_metrics"])
         if benchmark_wealth is not None:
-            st.plotly_chart(
+            plotly_chart(
                 C.benchmark_relative_chart(
                     wealth, benchmark_wealth,
                     title=t("dashboard.rebased_title",
                             ticker=context.get("benchmark_ticker", ""))),
-                use_container_width=True,
             )
     else:
         st.info(t("perf.no_benchmark"))

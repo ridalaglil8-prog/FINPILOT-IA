@@ -18,6 +18,7 @@ from analytics.risk import drawdown_series
 from components import charts as C
 from components import kpi_cards as KPI
 from components.sidebar import render_sidebar
+from components.streamlit_compat import plotly_chart
 from config import APP_NAME, MARKETS
 from i18n import t
 from services.portfolio_service import build_context, is_usable
@@ -48,7 +49,7 @@ def _render_dashboard(context: dict) -> None:
             t("dashboard.allocation_pie", currency="" if value_key == "weight_pct" else currency),
             value_key=value_key,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart(fig)
     with right:
         weights_pct = [row["weight_pct"] for row in context["allocation"]]
         fig = C.allocation_bars(
@@ -56,7 +57,7 @@ def _render_dashboard(context: dict) -> None:
             weights_pct,
             t("dashboard.allocation_bars"),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        plotly_chart(fig)
 
     st.subheader(t("dashboard.performance_title"))
     wealth = context.get("wealth")
@@ -70,7 +71,7 @@ def _render_dashboard(context: dict) -> None:
         title=t("dashboard.wealth_title"),
         y_title=currency,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    plotly_chart(fig)
 
     st.subheader(t("dashboard.benchmark_title"))
     if context.get("benchmark_metrics"):
@@ -80,13 +81,13 @@ def _render_dashboard(context: dict) -> None:
                 wealth, benchmark_wealth,
                 title=t("dashboard.rebased_title", ticker=context.get("benchmark_ticker", "")),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            plotly_chart(fig)
     else:
         st.info(t("bench.unavailable"))
 
     fig = C.drawdown_chart(drawdown_series(context["groups"][0]["returns"]),
                            title=t("dashboard.drawdown_title"))
-    st.plotly_chart(fig, use_container_width=True)
+    plotly_chart(fig)
 
     market = context.get("market", "US")
     info = MARKETS.get(market, {})

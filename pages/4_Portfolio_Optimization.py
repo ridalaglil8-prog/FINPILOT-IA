@@ -9,6 +9,7 @@ st.set_page_config(page_title="FinPilot AI — Optimization", page_icon="⚖️"
 from components import charts as C
 from components import kpi_cards as KPI
 from components.sidebar import render_sidebar
+from components.streamlit_compat import dataframe, plotly_chart
 from i18n import t
 from optimization import optimizer
 from services.portfolio_service import (
@@ -123,7 +124,7 @@ def main() -> None:
          t("opt.current_col"): round(current_perf["sharpe"], 3),
          t("opt.optimized_col"): round(new_perf["sharpe"], 3)},
     ])
-    st.dataframe(metrics_frame, use_container_width=True, hide_index=True)
+    dataframe(metrics_frame, hide_index=True)
 
     row1 = st.columns(3)
     row1[0].metric(t("opt.expected_return"), KPI.fmt_pct(new_perf["expected_return"]),
@@ -135,13 +136,12 @@ def main() -> None:
                    delta=f"{new_perf['sharpe'] - current_perf['sharpe']:+.2f}")
 
     st.subheader(t("opt.allocations_title"))
-    st.plotly_chart(C.comparison_bars(result["comparison"], t("opt.table_title")),
-                    use_container_width=True)
+    plotly_chart(C.comparison_bars(result["comparison"], t("opt.table_title")),)
 
     frame = result["comparison"].copy()
     frame.columns = [t("common.asset"), t("opt.current_col"), t("opt.optimized_col"),
                      t("opt.change_col")]
-    st.dataframe(frame, use_container_width=True, hide_index=True)
+    dataframe(frame, hide_index=True)
 
 
 if __name__ == "__main__":

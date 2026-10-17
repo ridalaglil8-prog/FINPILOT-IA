@@ -10,6 +10,7 @@ from analytics import risk as Risk
 from components import charts as C
 from components import kpi_cards as KPI
 from components.sidebar import render_sidebar
+from components.streamlit_compat import plotly_chart
 from i18n import t
 from services.portfolio_service import build_context, is_usable
 
@@ -52,10 +53,9 @@ def main() -> None:
         st.markdown(f"#### {t('risk.correlation_title')}")
         correlation = context.get("correlation")
         if correlation and correlation.get("labels"):
-            st.plotly_chart(
+            plotly_chart(
                 C.correlation_heatmap(correlation["labels"], correlation["matrix"],
                                       title=t("risk.correlation_title")),
-                use_container_width=True,
             )
             st.caption(t("risk.avg_correlation",
                          value=f"{correlation.get('average', 0.0):.3f}"))
@@ -66,11 +66,10 @@ def main() -> None:
         st.markdown(f"#### {t('risk.risk_contrib_title')}")
         contributors = context.get("risk_contributors")
         if contributors:
-            st.plotly_chart(
+            plotly_chart(
                 C.allocation_bars([c["ticker"] for c in contributors],
                                   [c["risk_pct"] for c in contributors],
                                   title=t("risk.risk_contrib_title")),
-                use_container_width=True,
             )
             st.caption(t("risk.risk_contrib_note"))
         else:
@@ -83,14 +82,12 @@ def main() -> None:
     tab_hist, tab_vol = st.tabs([t("risk.histogram_title"),
                                  t("risk.rolling_vol_title", window=60)])
     with tab_hist:
-        st.plotly_chart(C.histogram(returns, title=t("risk.histogram_title")),
-                        use_container_width=True)
+        plotly_chart(C.histogram(returns, title=t("risk.histogram_title")),)
     with tab_vol:
         try:
             rolling = Corr.rolling_volatility(returns, window=60)
-            st.plotly_chart(C.rolling_vol_chart(rolling, title=t("risk.rolling_vol_title",
-                                                                 window=60)),
-                            use_container_width=True)
+            plotly_chart(C.rolling_vol_chart(rolling, title=t("risk.rolling_vol_title",
+                                                                 window=60)),)
         except Exception:
             st.info(t("code.short_history"))
 

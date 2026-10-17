@@ -18,6 +18,7 @@ from analytics import stress as Stress
 from components import charts as C
 from components import kpi_cards as KPI
 from components.sidebar import render_sidebar
+from components.streamlit_compat import dataframe, plotly_chart
 from i18n import t
 from services.portfolio_service import build_context, is_usable, stress_fingerprint
 
@@ -142,8 +143,7 @@ def _render_scenario(scenario: dict) -> None:
 
             affected = [r for r in result["rows"] if r["shock"] != 0.0]
             if affected:
-                st.plotly_chart(C.stress_chart(affected, t("stress.table_impact")),
-                                use_container_width=True)
+                plotly_chart(C.stress_chart(affected, t("stress.table_impact")),)
 
             frame = pd.DataFrame([
                 {
@@ -155,7 +155,7 @@ def _render_scenario(scenario: dict) -> None:
                 }
                 for r in result["rows"]
             ])
-            st.dataframe(frame, use_container_width=True, hide_index=True)
+            dataframe(frame, hide_index=True)
 
 
 def main() -> None:
