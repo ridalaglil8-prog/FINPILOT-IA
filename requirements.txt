@@ -1,0 +1,19 @@
+# FinPilot AI — pinned, mutually compatible stack
+# Target interpreter: Python 3.10 / 3.11 (verified on CPython 3.10.11)
+streamlit==1.41.1
+pandas==2.2.3
+numpy==1.26.4
+plotly==5.24.1
+yfinance==0.2.54
+PyPortfolioOpt==1.5.5
+scipy==1.13.1
+python-dotenv==1.0.1
+requests==2.32.3
+pytest==8.3.4
+
+# --- Installed automatically by PyPortfolioOpt (pinned here for reproducibility)
+# --- because the optimisation engine depends on them at runtime:
+cvxpy==1.7.5
+clarabel==0.11.1
+osqp==1.1.3
+joblib==1.6.0
