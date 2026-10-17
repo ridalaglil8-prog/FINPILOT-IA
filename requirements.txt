@@ -1,19 +1,34 @@
-# FinPilot AI — pinned, mutually compatible stack
-# Target interpreter: Python 3.10 / 3.11 (verified on CPython 3.10.11)
-streamlit==1.41.1
-pandas==2.2.3
-numpy==1.26.4
-plotly==5.24.1
-yfinance==0.2.54
-PyPortfolioOpt==1.5.5
-scipy==1.13.1
-python-dotenv==1.0.1
-requests==2.32.3
-pytest==8.3.4
+# FinPilot AI - Python dependencies
+#
+# Lower bounds are the versions this app is developed and fully tested
+# against (CPython 3.10, complete pytest suite). Upper bounds keep the next
+# major release out.
+#
+# Versions are bounded RANGES rather than exact pins, on purpose: pip/uv must
+# be able to pick, for the interpreter actually running the app, a release
+# that ships pre-built wheels. Exact pins such as numpy==1.26.4 or
+# scipy==1.13.1 have no wheels for Python 3.13 (Streamlit Community Cloud
+# defaults to the newest Python), so the whole dependency install fails and
+# the app boots with only Streamlit's own dependencies.
 
-# --- Installed automatically by PyPortfolioOpt (pinned here for reproducibility)
-# --- because the optimisation engine depends on them at runtime:
-cvxpy==1.7.5
-clarabel==0.11.1
-osqp==1.1.3
-joblib==1.6.0
+# --- Web app & data stack -------------------------------------------------
+streamlit>=1.41,<2
+pandas>=2.2,<3
+numpy>=1.26.4,<3
+plotly>=5.24,<7
+requests>=2.32,<3
+python-dotenv>=1.0,<2
+
+# --- Market data ----------------------------------------------------------
+yfinance>=0.2.54,<1
+
+# --- Portfolio optimisation (PyPortfolioOpt + its runtime dependencies) ---
+PyPortfolioOpt>=1.5.5,<2
+scipy>=1.11,<2
+cvxpy>=1.5,<2
+clarabel>=0.11,<1
+osqp>=1.1,<2
+joblib>=1.4,<2
+
+# --- Tests (local development / CI) --------------------------------------
+pytest>=8.3,<9

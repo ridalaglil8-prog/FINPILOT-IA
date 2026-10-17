@@ -7,11 +7,18 @@ No network: everything runs on deterministic Demo data.
 from __future__ import annotations
 
 import datetime as _dt
+from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
 import config
+
+# Streamlit's AppTest resolves script paths differently across versions:
+# older releases resolve them against the process CWD, newer ones (>=1.65)
+# against the file that calls AppTest.from_file().  Anchoring every path to
+# the repository root keeps the tests correct under both behaviours.
+_ROOT = Path(__file__).resolve().parent.parent
 
 # Streamlit's AppTest executes a script from the project root.
 MAIN = "app.py"
@@ -27,7 +34,10 @@ PAGES = [
 
 
 def _run(path: str, *, timeout: int = 120) -> AppTest:
-    at = AppTest.from_file(path, default_timeout=timeout)
+    script = Path(path)
+    if not script.is_absolute():
+        script = _ROOT / script
+    at = AppTest.from_file(str(script), default_timeout=timeout)
     at.run()
     return at
 

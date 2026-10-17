@@ -45,7 +45,9 @@ hypothetical stress scenarios, and ask an AI assistant to explain every metric
 
 ### 1. Requirements
 
-- Python **3.10 or 3.11** (verified on CPython 3.10.11, Windows)
+- Python **3.10 to 3.13** (dev environment: CPython 3.10.11, Windows;
+  `requirements.txt` uses bounded ranges so pip always finds pre-built
+  wheels — also on Streamlit Community Cloud's Python 3.13)
 - pip
 
 ### 2. Install
